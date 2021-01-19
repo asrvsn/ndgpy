@@ -8,7 +8,7 @@
   <h3 align="center">ndgpy: serialization-free numeric dataflow graphs for NumPy</h3>
 
   <p align="center">
-    Run parallel event-based numerical processes on a single host by defining NumPy-based data-emitting components, using shared memory instead of serialization. Inspired by [transport-triggered processing](https://en.wikipedia.org/wiki/Transport_triggered_architecture) and [systolic arrays](https://en.wikipedia.org/wiki/Systolic_array).
+    Run parallel event-based numerical processes on a single host by defining NumPy-based data-emitting components, using shared memory instead of serialization. Inspired by <a href="https://en.wikipedia.org/wiki/Transport_triggered_architecture">transport-triggered processing</a> and <a href="https://en.wikipedia.org/wiki/Systolic_array">systolic arrays</a>.
     <br />
     <a href="https://a0s.co/docs/ndgpy"><strong>Explore the docs [coming soon]»</strong></a>
   </p>
