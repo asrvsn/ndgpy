@@ -1,0 +1,7 @@
+shortuuid
+numpy
+pyzmq
+cloudpickle
+ujson
+aiozmq
+xxhash
