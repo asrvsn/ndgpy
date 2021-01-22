@@ -56,7 +56,9 @@ However, I often found these libraries to be too much for what I wanted (running
 
 ### Features
 
-* 
+* inter-component communication using [shared memory](https://docs.python.org/3/library/multiprocessing.shared_memory.html) instead of serialization
+* support for components requiring initialization-time [resources](https://github.com/asrvsn/ndgpy/blob/master/ndgpy/nodes/interfaces.py#L22) 
+* support for components [parametrizing](https://github.com/asrvsn/ndgpy/blob/master/ndgpy/nodes/interfaces.py#L35) other components (without triggering them)
 
 
 <!-- GETTING STARTED -->
@@ -141,11 +143,10 @@ MyLayout().start()
 
 ### Example: asynchronous LQR controller for cart-pole problem
 
-_Inspired by [1][1]_
+_Inspired by [http://www.cs.cmu.edu/~cga/dynopt/ltr/](http://www.cs.cmu.edu/~cga/dynopt/ltr/)_
 
 Suppose we have an inverted pendulum with a mass (also called cart-pole) from which we can take noisy readings over I/O. 
-We could perform state estimation & control in the same execution context, but these could be arbitrarily complex -- although here a simple
-LQR controller -- and while we're doing so, we might miss out on readings for other critical applications (in this case, logging). 
+We could perform state estimation & control in the same execution context, but these could be arbitrarily complex -- and while we're doing so, we might miss out on readings for other critical applications (in this case, logging). 
 
 This problem can be solved succinctly in `ndgpy` by declaring the sensor and controller in different execution contexts, as defined in
 `CartPoleSystem` below.
@@ -236,6 +237,26 @@ CartPoleSystem().start()
 
 In this system, there is no serialization happening between `Sensor` and `Controller` even though they execute in parallel -- so we can use states of very high dimension without much cost.
 
+### Example: test throughput of a program
+
+By using the resource-initialization procedure, we can add the following node at any point in the graph as a measurement probe of throughput.
+
+```python
+class Throughput(Collector, Resourced):
+  async def start(self, res):
+    self.start_time = datetime.datetime.now()
+    self.ctr = 0
+
+  async def stop(self):
+    delta = (now() - self.start_time) / np.timedelta64(1, 's')
+    print(f'Throughput: {self.ctr/delta} / sec')
+
+  async def compute(self, values):
+    self.ctr += 1
+```
+
+Run `python -m ndgpy.examples.throughput` or see the [script](https://github.com/asrvsn/ndgpy/blob/master/ndgpy/examples/throughput.py).
+
 _For more examples, please refer to the [Documentation (coming soon)](https://a0s.co/docs/ndgpy)_
 
 <!-- ROADMAP -->
@@ -252,6 +273,3 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 
 <!-- ACKNOWLEDGEMENTS -->
-## References
-
-[1]: http://www.cs.cmu.edu/~cga/dynopt/ltr/

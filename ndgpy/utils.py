@@ -12,3 +12,7 @@ def wire_unpickle(x: str):
 
 def now():
 	return np.datetime64(datetime.now())
+
+def flatten(arr: np.ndarray):
+	''' Flatten nested structured array ''' 
+	raise Exception('implement me')

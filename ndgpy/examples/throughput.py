@@ -4,6 +4,7 @@ from typing import Callable
 import numpy as np
 import asyncio
 
+from ndgpy.layout import Layout
 from ndgpy.utils import now
 from ndgpy.nodes.numeric import *
 
