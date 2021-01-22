@@ -8,7 +8,7 @@
   <h3 align="center">ndgpy: serialization-free numeric dataflow graphs for NumPy</h3>
 
   <p align="center">
-    Run parallel event-based numerical processes on a single host by defining NumPy-based data-emitting components, using shared memory instead of serialization. Inspired by <a href="https://en.wikipedia.org/wiki/Transport_triggered_architecture">transport-triggered processing</a> and <a href="https://en.wikipedia.org/wiki/Systolic_array">systolic arrays</a>.
+    Run parallel event-based numerical processes on a single host by defining NumPy-based data-emitting components. Inspired by <a href="https://en.wikipedia.org/wiki/Transport_triggered_architecture">transport-triggered processing</a> and <a href="https://en.wikipedia.org/wiki/Systolic_array">systolic arrays</a>.
     <br />
     <a href="https://a0s.co/docs/ndgpy"><strong>Explore the docs [coming soon]»</strong></a>
   </p>
@@ -46,8 +46,41 @@
 <!-- ABOUT THE PROJECT -->
 ## About
 
-![Product Name Screen Shot][product-screenshot]
+![(made using Excalidraw)][images/diagram.svg]
 
+This library provides a way of expressing numeric computations involving I/O as graphs laid out across processes. 
+
+Like many libraries for parallel task scheduling ([Joblib](https://joblib.readthedocs.io/en/latest/), [Ray](https://github.com/ray-project/ray), [Dask](https://dask.org/), [Airflow](https://airflow.apache.org/)), it provides a declarative interface for constructing computation graphs.
+
+However, I often found these libraries to be too much for what I wanted (running simple interdependent numerical codes in parallel) and sometimes imposed too many restrictions (e.g. statelessness). `ndgpy` is not a replacement for any of those libraries, and simply provides a way to connect *numerically valued* subprograms with *serialization-free interconnects* on a *single host*, with transparent *user-defined scheduling*. It's really just a thin layer on top of `asyncio`.
+
+There are three components exposed, named `Emitter`, `Router`, and `Collector` (named for the legs of a transistor). An `Emitter` is simply a parent node in the graph which is executed repeatedly whenever possible. A `Collector` is a leaf node which executes whenever all its parents have executed. A `Router` is a node which is both an `Emitter` and a `Collector`. 
+
+Both `Emitter` and `Router`, being data-emitting components, have output types specified at initialization as [NumPy structured data types](https://numpy.org/doc/stable/user/basics.rec.html). This allows the program to exchange data using shared memory rather than serialization, and is suitable in cases where internal states are of a fixed size and high throughput is desired.
+
+Together, these components are strung together in a `Layout` (data-flow graph), and pinned to specific processes ("execution contexts") by the user. This is especially useful if there are I/O-heavy and computation-heavy components and it is desirable to avoid one blocking the other. Even graphs consisting of entirely computational elements can benefit from this layout, since it allows subgraphs to execute at different intrinsic timescales (e.g. a parameter update proocess vs. a model sparsification process). 
+
+Consider the following example with a "fast" and a "slow" data-emitting process:
+```python
+class MyProgram(Layout):
+  async def setup(self):
+
+    # Declare three nodes on process 1
+    ctx1 = self.new_context()
+    n1, n2, n3 = Emitter1(), Router1(), Collector1()
+    await self.add(ctx1, [n1, n2, n3]) # n1 immediately starts executing and triggering n2, n3
+    await self.connect(n1, n2)
+    await self.connect(n2, n3)
+
+    # Declare two others on process 2
+    ctx2 = self.new_context()
+    n4, n5 = Emitter2(), Collector2() 
+    await self.add(ctx2, [n4, n5]) 
+    await self.connect(n1, n5) 
+    await self.connect(n4, n5) # n5 depends on the fast emitter n1 but also the slow emitter n4; declare it on context 2 to avoid blocking n2, n3
+
+MyProgram().start()
+```
 
 ### Example: asynchronous LQR controller for cart-pole problem
 
@@ -55,7 +88,7 @@ Inspired by [1]. Suppose we have an inverted pendulum with a mass (also called c
 We could perform state estimation & control in the same execution context, but these could be arbitrarily complex -- although here a simple
 LQR controller -- and while we're doing so, we might miss out on readings for other critical applications (in this case, logging). 
 
-This problem can be solved succinctly in `ndgpy` by declaring the sensor and controller in different execution contexts, by the dataflow graph
+This problem can be solved succinctly in `ndgpy` by declaring the sensor and controller in different execution contexts, as defined in
 `CartPoleSystem` below.
 
 ```python
