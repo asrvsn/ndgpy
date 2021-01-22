@@ -40,7 +40,7 @@ class Throughput(Collector, Resourced):
 
 # Example
 
-class TestOrchestrator(Orchestrator):
+class TestLayout(Layout):
 	async def setup(self):
 		ctx1 = self.new_context()
 
@@ -65,4 +65,4 @@ class TestOrchestrator(Orchestrator):
 		await self.connect(p3.id, p4.id)
 
 if __name__ == '__main__':
-	TestOrchestrator().start()
+	TestLayout().start()

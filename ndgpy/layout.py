@@ -25,14 +25,14 @@ from .network import *
 Publication = Tuple[NodeID, SharedData]
 Subscription = Tuple[NodeID, ContextID]
 
-''' Orchestrator class / entry point '''
+''' Layout class / entry point '''
 
-class Orchestrator(ABC):
+class Layout(ABC):
 	''' Graph execution runner / manager for processes across multiple execution contexts
 	For now, restricted to single machine.
 
 	Duties:
-	* expose an orchestrator API 
+	* expose an Layout API 
 	''' 
 	def __init__(self):
 		''' Subclasses should in general override setup() rather than __init__() '''
@@ -226,7 +226,7 @@ class Orchestrator(ABC):
 		Blocks until interrupted. Can use this method alongside other coroutines.
 		'''
 		with self as self:
-			print('Orchestrator started')
+			print('Layout started')
 			async def run():
 				await self.setup()
 				await self.run()

@@ -52,39 +52,98 @@ This library provides a way of expressing numeric computations involving I/O as 
 
 Like many libraries for parallel task scheduling ([Joblib](https://joblib.readthedocs.io/en/latest/), [Ray](https://github.com/ray-project/ray), [Dask](https://dask.org/), [Airflow](https://airflow.apache.org/)), it provides a declarative interface for constructing computation graphs.
 
-However, I often found these libraries to be too much for what I wanted (running simple interdependent numerical codes in parallel) and sometimes imposed too many restrictions (e.g. statelessness). `ndgpy` is not a replacement for any of those libraries, and simply provides a way to connect *numerically valued* subprograms with *serialization-free interconnects* on a *single host*, with transparent *user-defined scheduling*. It's really just a thin layer on top of `asyncio`.
+However, I often found these libraries to be too much for what I wanted (running simple interdependent numerical codes in parallel) and sometimes imposed too many restrictions (e.g. statelessness). `ndgpy` is not a replacement for any of those libraries, and simply provides a way to connect **numerically valued** subprograms with **serialization-free interconnects** on a **single host**, with **transparent user-defined scheduling**. It's really just a thin layer on top of [`asyncio`](https://docs.python.org/3/library/asyncio.html).
 
-There are three components exposed, named `Emitter`, `Router`, and `Collector` (named for the legs of a transistor). An `Emitter` is simply a parent node in the graph which is executed repeatedly whenever possible. A `Collector` is a leaf node which executes whenever all its parents have executed. A `Router` is a node which is both an `Emitter` and a `Collector`. 
+### Features
 
-Both `Emitter` and `Router`, being data-emitting components, have output types specified at initialization as [NumPy structured data types](https://numpy.org/doc/stable/user/basics.rec.html). This allows the program to exchange data using shared memory rather than serialization, and is suitable in cases where internal states are of a fixed size and high throughput is desired.
+* 
 
-Together, these components are strung together in a `Layout` (data-flow graph), and pinned to specific processes ("execution contexts") by the user. This is especially useful if there are I/O-heavy and computation-heavy components and it is desirable to avoid one blocking the other. Even graphs consisting of entirely computational elements can benefit from this layout, since it allows subgraphs to execute at different intrinsic timescales (e.g. a parameter update proocess vs. a model sparsification process). 
+
+<!-- GETTING STARTED -->
+## Getting Started
+
+To get a local copy up and running follow these simple steps.
+
+### Prerequisites
+
+* `conda` (recommended) or python >= 3.7 
+
+This has not been tested in all environments (especially Windows), so please report bugs.
+
+### Installation
+
+* In local environment
+```sh
+pip install git+git://github.com/asrvsn/ndgpy.git
+```
+* As a project dependency
+```sh
+# Add to `requirements.txt`
+-e git://github.com/asrvsn/ndgpy.git#egg=ndgpy
+```
+
+
+<!-- USAGE EXAMPLES -->
+## Usage
+
+There are three components exposed, named `Emitter`, `Router`, and `Collector` (named for the legs of a transistor). 
+* `Emitter` is a parent node in the graph which is executed repeatedly whenever possible
+* `Collector` is a leaf node which executes whenever all its parents have executed 
+* `Router` is a node which is both an `Emitter` and a `Collector`. 
+
+`Emitter` and `Router`, being the data-emitting components, have output types specified at initialization as [NumPy structured data types](https://numpy.org/doc/stable/user/basics.rec.html). This allows the program to exchange data using shared memory rather than serialization, and is suitable in cases where internal states are of a fixed size and high throughput is desired.
+
+Together, these components are strung together in a `Layout` (data-flow graph), and pinned to specific processes ("execution contexts") by the user. This is especially useful if there are I/O-heavy and computation-heavy components, and it is desirable to avoid one blocking the other. Even graphs consisting of entirely computational elements can benefit from this layout, since it allows subgraphs to execute at their own intrinsic timescales (e.g., a parameter update process vs. a model sparsification process). 
+
+
+### Example: processes running at two timescales
 
 Consider the following example with a "fast" and a "slow" data-emitting process:
+
 ```python
-class MyProgram(Layout):
+class Noise(Emitter):
+  ''' This process emits random values every `dt` seconds. '''
+  def __init__(self, dt: float):
+    self.dt = dt
+    super().__init__(np.float64) 
+
+  async def compute(self):
+    await asyncio.sleep(self.dt)
+    return np.random.uniform()
+
+class Printer(Collector):
+  ''' Prints received values '''
+  async def compute(self, *values):
+    print(values)
+
+class MyLayout(Layout):
   async def setup(self):
 
-    # Declare three nodes on process 1
+    # Declare a fast noise emitter on process 1
     ctx1 = self.new_context()
-    n1, n2, n3 = Emitter1(), Router1(), Collector1()
-    await self.add(ctx1, [n1, n2, n3]) # n1 immediately starts executing and triggering n2, n3
-    await self.connect(n1, n2)
-    await self.connect(n2, n3)
+    noise1 = Noise(0.1)
+    printer1 = Printer()
+    await self.add(ctx1, [noise1, printer1])
+    await self.connect(noise1, printer)
 
-    # Declare two others on process 2
+    # Declare a slow noise emitter on process 2
     ctx2 = self.new_context()
-    n4, n5 = Emitter2(), Collector2() 
-    await self.add(ctx2, [n4, n5]) 
-    await self.connect(n1, n5) 
-    await self.connect(n4, n5) # n5 depends on the fast emitter n1 but also the slow emitter n4; declare it on context 2 to avoid blocking n2, n3
+    noise2 = Noise(1.0)
+    printer2 = Printer()
+    await self.add(ctx2, [noise2, printer2])
 
-MyProgram().start()
+    # Enforce the second printer to depend on both emitters -- thus having the slowest throughput out of all nodes
+    await self.connect(noise1, printer2)
+    await self.connect(noise2, printer2)
+
+MyLayout().start()
 ```
 
 ### Example: asynchronous LQR controller for cart-pole problem
 
-Inspired by [1]. Suppose we have an inverted pendulum with a mass (also called cart-pole) from which we can take noisy readings over I/O. 
+_Inspired by [1][1]_
+
+Suppose we have an inverted pendulum with a mass (also called cart-pole) from which we can take noisy readings over I/O. 
 We could perform state estimation & control in the same execution context, but these could be arbitrarily complex -- although here a simple
 LQR controller -- and while we're doing so, we might miss out on readings for other critical applications (in this case, logging). 
 
@@ -101,7 +160,7 @@ class Sensor(Emitter):
 
   async def compute(self):
     ''' Obtain readings asynchronously '''
-    self.output['cart_x'] = await sense_cart_x()
+    self.output['cart_x'] = await sense_cart_x() # Read over I/O
     self.output['cart_v'] = await sense_cart_v()
     self.output['pole_theta'] = await sense_pole_theta()
     self.output['pole_omega'] = await sense_pole_omega()
@@ -143,16 +202,16 @@ class Controller(Router):
     # Pretend these computations are really expensive
     u = -self.Kc@estimate
     self.output['control'] = u
-    await apply_control(u)
+    await apply_control(u) # Write over I/O
 
 class Logger(Collector):
   ''' Log the system states ''' 
   async def compute(self, state):
     await write_to_file(state)
 
-class CartPoleSystem(DFG):
+class CartPoleSystem(Layout):
   ''' 
-  This system avoids missing out on logged readings by running expensive estimation/control operations in separate contexts.
+  This system avoids missing out on logging readings by running expensive estimation/control operations in a separate context.
   '''
   async def setup(self):
 
@@ -177,51 +236,7 @@ CartPoleSystem().start()
 
 In this system, there is no serialization happening between `Sensor` and `Controller` even though they execute in parallel -- so we can use states of very high dimension without much cost.
 
-### Features
-
-* 
-
-
-<!-- GETTING STARTED -->
-## Getting Started
-
-To get a local copy up and running follow these simple steps.
-
-### Prerequisites
-
-* `conda` (recommended) or python >= 3.7 
-
-This has not been tested in all environments (especially Windows), so please report bugs.
-
-### Installation
-
-* In local environment
-```sh
-pip install git+git://github.com/asrvsn/ndgpy.git
-```
-* As a project dependency
-```sh
-# Add to `requirements.txt`
--e git://github.com/asrvsn/ndgpy.git#egg=ndgpy
-```
-
-
-<!-- USAGE EXAMPLES -->
-## Usage
-
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
-
 _For more examples, please refer to the [Documentation (coming soon)](https://a0s.co/docs/ndgpy)_
-
-### Example: 
-
-Definition:
-```python
-
-```
-
-Result:
-
 
 <!-- ROADMAP -->
 ## Roadmap
@@ -239,6 +254,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 <!-- ACKNOWLEDGEMENTS -->
 ## References
 
-* [http://www.cs.cmu.edu/~cga/dynopt/ltr/](http://www.cs.cmu.edu/~cga/dynopt/ltr/)
-* []()
-* []()
+[1]: http://www.cs.cmu.edu/~cga/dynopt/ltr/
