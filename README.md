@@ -1,9 +1,9 @@
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
-  <a href="https://github.com/asrvsn/ndgpy">
+<!--   <a href="https://github.com/asrvsn/ndgpy">
     <img src="logo.png" alt="Logo" width="80" height="80">
-  </a>
+  </a> -->
 
   <h3 align="center">ndgpy: serialization-free numeric dataflow graphs for NumPy</h3>
 
@@ -68,7 +68,7 @@ To get a local copy up and running follow these simple steps.
 
 ### Prerequisites
 
-* `conda` (recommended) or python >= 3.7 
+* python >= 3.8
 
 This has not been tested in all environments (especially Windows), so please report bugs.
 
@@ -88,7 +88,7 @@ pip install git+git://github.com/asrvsn/ndgpy.git
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-There are three components exposed, named `Emitter`, `Router`, and `Collector` (named for the legs of a transistor). 
+There are three main components, named `Emitter`, `Router`, and `Collector` (named for the legs of a transistor). 
 * `Emitter` is a parent node in the graph which is executed repeatedly whenever possible
 * `Collector` is a leaf node which executes whenever all its parents have executed 
 * `Router` is a node which is both an `Emitter` and a `Collector`. 
@@ -220,14 +220,14 @@ class CartPoleSystem(Layout):
     ctx1 = self.new_context()
     sensor = Sensor()
     logger = Logger()
-    await self.add([sensor, logger], ctx1)
+    await self.add(ctx1, [sensor, logger])
     await self.connect(sensor, logger)
 
     # Run observer & controller on Context 2
     ctx2 = self.new_context()
     observer = Observer()
     controller = Controller()
-    await self.add([observer, controller], ctx2)
+    await self.add(ctx2, [observer, controller])
     await self.connect(sensor, observer)
     await self.connect(observer, controller)
     await self.connect(controller, observer)
@@ -239,7 +239,7 @@ In this system, there is no serialization happening between `Sensor` and `Contro
 
 ### Example: test throughput of a program
 
-By using the resource-initialization procedure, we can add the following node at any point in the graph as a measurement probe of throughput.
+By inheriting the `Resourced` class, we can define start-up and shut-down procedures. We use this to define the following node at any point in the graph as a measurement probe of throughput.
 
 ```python
 class Throughput(Collector, Resourced):
@@ -248,7 +248,7 @@ class Throughput(Collector, Resourced):
     self.ctr = 0
 
   async def stop(self):
-    delta = (now() - self.start_time) / np.timedelta64(1, 's')
+    delta = (datetime.datetime.now() - self.start_time) / np.timedelta64(1, 's')
     print(f'Throughput: {self.ctr/delta} / sec')
 
   async def compute(self, values):
