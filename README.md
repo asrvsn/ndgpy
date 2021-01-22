@@ -46,7 +46,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About
 
-![(made using Excalidraw)][images/diagram.svg]
+![made using Excalidraw](images/diagram.svg)
 
 This library provides a way of expressing numeric computations involving I/O as graphs laid out across processes. 
 
