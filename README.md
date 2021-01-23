@@ -235,7 +235,7 @@ class CartPoleSystem(Layout):
 CartPoleSystem().start()
 ```
 
-In this system, there is no serialization happening between `Sensor` and `Controller` even though they execute in parallel -- so we can use states of very high dimension without much cost.
+In this system, there is no serialization happening between `Sensor` and `Controller` even though they execute in parallel -- so we can use states of very high dimension without much cost. The latency between `Sensor` and `Controller` is constant, and is exactly cost of [sending a single byte over IPC](https://github.com/asrvsn/ndgpy/blob/master/ndgpy/nodes/boundary.py#L64).
 
 ### Example: test throughput of a program
 
